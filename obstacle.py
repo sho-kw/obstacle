@@ -53,19 +53,8 @@ class GeomContainer(rendering.Geom):
         #
         if self.collider_func is not None:
             self.collider = self.collider_func(self.abs_pos, self.abs_angle)
-    def get_intersections(self, collider):
-        if self.collider_func is not None:
-            return intersection(self.collider_func(self.abs_pos, self.abs_angle), collider)
-        else:
-            return []
     def get_geom_list(self):
         return [self]
-
-def choose_nearest_point(points, reference_point):
-    if len(points) == 0:
-        raise RuntimeError()
-    points = sorted(points, key=lambda point: point.distance(reference_point))
-    return points[0]
 
 class Sensor(GeomContainer):
     def __init__(self, geom, **kwargs):
@@ -154,57 +143,50 @@ class ObstacleEnv(Env):
     }
     def __init__(self):
         rob_r = 30
-        obs_r = 30
+        obs_r, obs_num = 30, 10
+        
         self.screen_width = 1000
         self.screen_height = 600
-        self.state = np.zeros(8, dtype=np.float32)
+        self.state = np.zeros((obs_num + 1) * 2, dtype=np.float32)
         self.viewer = None
         self.robot = Robot()
         self.obstacles = []
-        for i in range(3):
+        for i in range(obs_num):
             obs = GeomContainer(rendering.make_circle(obs_r))
             obs.set_color(0, 1, 0)
             self.obstacles.append(obs)
         UNIT_SQUARE = np.array([[100, 100], [100, 500], [900, 500], [900, 100]])
         self.wall =GeomContainer(rendering.make_polygon(UNIT_SQUARE))
-        #
         self.visible_object = []
         self.register_visible_object(self.wall)
         self.register_visible_object(self.robot)
         for obs in self.obstacles:
             self.register_visible_object(obs)
-
     def intersection(self):
+        obs_r, obs_num = 30, 10
         sen_num = 20
         RS = []
         for i in range(sen_num):
             theta = math.radians(360 / sen_num * i)
             rs = np.asarray([100*math.cos(theta),100*math.sin(theta)], dtype=np.float32)
             RS.append(rs)
-        #print(RS)            
         ROb = []
-        for j in range(3):
+        for j in range(obs_num):
             dx = self.robot.pos[0] - self.obstacles[j].pos[0]
             dy = self.robot.pos[1] - self.obstacles[j].pos[1]
             rob = np.asarray([dx,dy], dtype=np.float32)
             ROb.append(rob)
-        #print(ROb)
         distance =[]
         for i in range(sen_num):
             AX = []
-            for j in range(3):
+            for j in range(obs_num):
                 ax = (np.dot(ROb[j], RS[i])/100)
                 px = (np.cross(ROb[j], RS[i])/100)
-                #print(ax,px)
-                if abs(px) <= 30 and 0 <= ax and ax <= 100 + math.sqrt(math.pow(30, 2) - math.pow(px, 2)):
-                    AX.append(ax - math.sqrt(math.pow(30, 2) - math.pow(px, 2)))
-                    #print('o')
+                if abs(px) <= obs_r and 0 <= ax and ax <= 100 + math.sqrt(math.pow(obs_r, 2) - math.pow(px, 2)):
+                    AX.append(ax - math.sqrt(math.pow(obs_r, 2) - math.pow(px, 2)))
                 else:
                     AX.append(nan)
-                    #print('x')
-            
-            #print(AX)
-            #print(RS[i][1] + self.robot.pos[1])
+
             if RS[i][0] + self.robot.pos[0] < 100:
                 l = -self.robot.pos[0] / math.cos(math.radians(0 + 360 / sen_num * i))
             elif RS[i][1] + self.robot.pos[1] < 100:
@@ -214,29 +196,22 @@ class ObstacleEnv(Env):
             else:
                 l = nan
 
-            #print(l,np.nanmin(AX))
-
             if l != l:
                 dis = np.nanmin(AX)
-                #print('o')
             elif np.nanmin(AX) != np.nanmin(AX):
                 dis = np.nanmin(l)
-                #print('x')
             else:
                 AX.append(l)
                 dis = dis = np.nanmin(AX)
             distance.append(dis)
         if np.nanmin(distance) >= 0 :
             self.robot.set_color(0, 0, 0)
-            #self.ray_geom.set_color(1, 1, 0)
         else:
             self.robot.set_color(0, 0, 1)
-            #self.ray_geom.set_color(1, 0.5, 0.5)
-        print(distance)
-
+        #print(distance)
     def _step(self, action):
         rob_r = 30
-        obs_r = 30
+        obs_r, obs_num = 30, 10
         dx = []
         dy = []
         if action == 0:
@@ -258,7 +233,7 @@ class ObstacleEnv(Env):
         self.update_state()
         self.intersection()
         #
-        for i in range(3):
+        for i in range(obs_num):
             dx = self.robot.pos[0] - self.obstacles[i].pos[0]
             dy = self.robot.pos[1] - self.obstacles[i].pos[1]            
             done = pow(rob_r + obs_r,2) >= pow(dx,2) + pow(dy,2) 
@@ -267,26 +242,30 @@ class ObstacleEnv(Env):
                 break
         if not done:
             reward = self.robot.pos[0]
+        if self.robot.pos[0] >= 870:
+            reward = self.robot.pos[0]
+            done
         return self.state, reward, done, {}
     def _reset(self):
+        obs_r, obs_num = 30, 10
         ROb = []
         self.robot.set_pos(150, 300)
         self.robot.set_angle(0)
         self.robot.set_color(0, 0, 1)
         for obs in self.obstacles:
-            obs.set_pos(randint(100, 900), randint(100, 500))
+            obs.set_pos(randint(100 + obs_r, 900 - obs_r), randint(100 + obs_r, 500 - obs_r))
             obs.set_angle(0)
-        for i in range(3):
+        for i in range(obs_num):
             rob = np.asarray([self.obstacles[i].pos[0] - self.robot.pos[0], self.obstacles[i].pos[1] - self.robot.pos[1]], dtype=np.float32)
             ROb.append(rob)
         #self.ray_geom.set_color(1, 0.5, 0.5)
         self.update_state()
         return self.state
     def update_state(self):
+        obs_num = 10
         self.state[0:2] = self.robot.pos
-        self.state[2:4] = self.obstacles[0].pos
-        self.state[4:6] = self.obstacles[1].pos
-        self.state[6:8] = self.obstacles[2].pos
+        for i in range(obs_num):
+            self.state[(i+1)*2:(i+2)*2] = self.obstacles[i].pos
     def register_visible_object(self, geom_container):
         self.visible_object.extend(geom_container.get_geom_list())
     def _render(self, mode='human', close=False):
@@ -302,7 +281,6 @@ class ObstacleEnv(Env):
                 self.viewer.add_geom(geom)
         return self.viewer.render(return_rgb_array=(mode=='rgb_array'))
 
-
 def main():
     from gym.envs.registration import register
     register(
@@ -313,7 +291,7 @@ def main():
         )
     import gym
     env = gym.make('Obstacle-v0')
-    for episode in range(1):
+    for episode in range(5):
         step_count = 0
         state = env.reset()
         while True:
