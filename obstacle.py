@@ -141,10 +141,10 @@ class ObstacleEnv(Env):
         'render.modes': ['human', 'rgb_array'],
         'video.frames_per_second' : 50
     }
+
     def __init__(self):
         rob_r = 30
-        obs_r, obs_num = 30, 10
-        
+        obs_r, obs_num = 30, 5
         self.screen_width = 1000
         self.screen_height = 600
         self.state = np.zeros((obs_num + 1) * 2, dtype=np.float32)
@@ -162,8 +162,9 @@ class ObstacleEnv(Env):
         self.register_visible_object(self.robot)
         for obs in self.obstacles:
             self.register_visible_object(obs)
+
     def intersection(self):
-        obs_r, obs_num = 30, 10
+        obs_r, obs_num = 30, 5
         sen_num = 20
         RS = []
         for i in range(sen_num):
@@ -205,13 +206,14 @@ class ObstacleEnv(Env):
                 dis = dis = np.nanmin(AX)
             distance.append(dis)
         if np.nanmin(distance) >= 0 :
-            self.robot.set_color(0, 0, 0)
+            self.robot.set_color(1, 1, 0)
         else:
             self.robot.set_color(0, 0, 1)
+        return distance
         #print(distance)
     def _step(self, action):
         rob_r = 30
-        obs_r, obs_num = 30, 10
+        obs_r, obs_num = 30, 5
         dx = []
         dy = []
         if action == 0:
@@ -231,7 +233,7 @@ class ObstacleEnv(Env):
 
         self.robot.update_sensors(self.visible_object)
         self.update_state()
-        self.intersection()
+        distance = self.intersection()
         #
         for i in range(obs_num):
             dx = self.robot.pos[0] - self.obstacles[i].pos[0]
@@ -247,7 +249,7 @@ class ObstacleEnv(Env):
             done
         return self.state, reward, done, {}
     def _reset(self):
-        obs_r, obs_num = 30, 10
+        obs_r, obs_num = 30, 5
         ROb = []
         self.robot.set_pos(150, 300)
         self.robot.set_angle(0)
@@ -262,7 +264,7 @@ class ObstacleEnv(Env):
         self.update_state()
         return self.state
     def update_state(self):
-        obs_num = 10
+        obs_num = 5
         self.state[0:2] = self.robot.pos
         for i in range(obs_num):
             self.state[(i+1)*2:(i+2)*2] = self.obstacles[i].pos
@@ -300,7 +302,10 @@ def main():
                 action = 0
             else:
                 action = 0
-            state, reward, done, info = env.step(action)
+            #if step_count != 0:
+            #    past_dist = distance
+            #    print(past_dist, distance)
+            state, reward, done, info= env.step(action)
             step_count += 1
             if done:
                 print('finished episode {}, reward={}'.format(episode, reward))
